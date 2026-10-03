@@ -54,10 +54,7 @@ About to run a command / read a file / call an API?
 │   └── Use ctx_fetch_and_index → ctx_search
 │
 ├── Using Playwright (navigate, snapshot, console, network)?
-│   └── ALWAYS use filename parameter to save to file, then:
-│       browser_snapshot(filename) → ctx_index(path) or ctx_execute_file(path)
-│       browser_console_messages(filename) → ctx_execute_file(path)
-│       browser_network_requests(filename) → ctx_execute_file(path)
+│   └── Save to file, then index or extract — see "Browser & Playwright Integration"
 │       ⚠ browser_navigate returns a snapshot automatically — ignore it,
 │         use browser_snapshot(filename) for any inspection.
 │       ⚠ Playwright MCP uses a SINGLE browser instance — NOT parallel-safe.
@@ -95,9 +92,7 @@ About to run a command / read a file / call an API?
 | Read a data file | `ctx_execute_file` | Analyze CSV, JSON, YAML, XML |
 | Read source code to analyze | `ctx_execute_file` | Count functions, find patterns, extract metrics |
 | Fetch web docs | `ctx_fetch_and_index` | Index React/Next.js/Zod docs, then search |
-| Playwright snapshot | `browser_snapshot(filename)` → `ctx_index(path)` → `ctx_search` | Save to file, index server-side, query |
-| Playwright snapshot (one-shot) | `browser_snapshot(filename)` → `ctx_execute_file(path)` | Save to file, extract in sandbox |
-| Playwright console/network | `browser_*(filename)` → `ctx_execute_file(path)` | Save to file, analyze in sandbox |
+| Playwright snapshot / console / network | `browser_*(filename: ...)` → `ctx_index(path)` or `ctx_execute_file(path)` | Save to file, then index (multi-query) or extract (one-shot) — see the Key Rule |
 | MCP output (already in context) | Use directly | Don't re-index — it's already loaded |
 | MCP output (need multi-query) | `ctx_execute` to save → `ctx_index(path)` → `ctx_search` | Save to file first, index server-side |
 | Wipe indexed KB content | `ctx_purge(confirm: true)` | Permanently deletes all indexed content |
@@ -150,7 +145,7 @@ Use context-mode for ANY of these, without being asked:
 4. **For files you need to EDIT**: Use the normal Read tool. context-mode is for analysis, not editing.
 5. **For Bash whitelist commands only**: Use Bash for file mutations, git writes, navigation, process control, package install, and echo. Everything else goes through context-mode.
 6. **Never use `ctx_index(content: large_data)`.** Use `ctx_index(path: ...)` to read files server-side. The `content` parameter sends data through context as a tool parameter — use it only for small inline text.
-7. **Always use `filename` parameter** on Playwright tools (`browser_snapshot`, `browser_console_messages`, `browser_network_requests`). Without it, the full output enters context.
+7. **Playwright tools must save to file first**: pass `filename` to `browser_snapshot`, `browser_console_messages`, and `browser_network_requests`. See the Key Rule in "Browser & Playwright Integration" for where to send the file.
 8. **Don't re-index data already in context.** If an MCP tool returned data in a previous response, it's already loaded — use it directly or save to file first.
 
 ## Sandboxed Data Workflow
@@ -207,8 +202,6 @@ print(f"Records: {len(data)}")
 ```
 
 ## Browser & Playwright Integration
-
-**When a task involves Playwright snapshots, screenshots, or page inspection, ALWAYS route through file → sandbox.**
 
 Playwright `browser_snapshot` returns 10K–135K tokens of accessibility tree data. Calling it without `filename` dumps all of that into context. Passing the output to `ctx_index(content: ...)` sends it into context a SECOND time as a parameter. Both are wrong.
 
@@ -285,11 +278,10 @@ Subagents automatically receive context-mode tool routing via a PreToolUse hook.
 - Piping Bash output through `| head -20` → you lose the rest. Use `ctx_execute` to analyze ALL data and print summary.
 - Narrowing `ctx_execute` output upstream of capture → `ctx_execute` captures, `ctx_search` filters; merging the layers drops data that the index never sees. See `references/anti-patterns.md` §8.
 - Running `npm test` via Bash → full test output in context. Use `ctx_execute` to capture and summarize.
-- Calling `browser_snapshot()` WITHOUT `filename` parameter → 135K tokens flood context. **Always** use `browser_snapshot(filename: "/tmp/snap.md")`.
-- Calling `browser_console_messages()` or `browser_network_requests()` WITHOUT `filename` → entire output floods context. **Always** use the `filename` parameter.
+- Calling any Playwright tool without `filename` → the full snapshot, console, or network output floods context. See the Key Rule in "Browser & Playwright Integration".
 - Passing ANY large data to `ctx_index(content: ...)` → data enters context as a parameter. **Always** use `ctx_index(path: ...)` to read server-side. The `content` parameter should only be used for small inline text you're composing yourself.
 - Calling an MCP tool (Context7 `query-docs`, GitHub API, etc.) then passing the response to `ctx_index(content: response)` → **doubles** context usage. The response is already in context — use it directly or save to file first.
-- Ignoring `browser_navigate` auto-snapshot → navigation response includes a full page snapshot. Don't rely on it for inspection — call `browser_snapshot(filename)` separately.
+- Ignoring `browser_navigate` auto-snapshot → navigation response includes a full page snapshot. Don't rely on it for inspection — call `browser_snapshot(filename)` separately. See the Key Rule in "Browser & Playwright Integration".
 - Expecting `ctx_stats` to reset or wipe anything → `ctx_stats` is read-only (shows stats only). Use `ctx_purge(confirm: true)` to permanently delete all indexed content.
 
 ## Reference Files

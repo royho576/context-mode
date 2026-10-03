@@ -2580,6 +2580,33 @@ describe("SKILL.md prefers MCP tool over Bash", () => {
   });
 });
 
+// ── context-mode SKILL.md states the Playwright rule once ──────────────
+
+describe("context-mode SKILL.md states the Playwright rule once", () => {
+  const skill = readFileSync(resolve(ROOT, "skills", "context-mode", "SKILL.md"), "utf-8");
+  const SECTION = "Browser & Playwright Integration";
+  const CANONICAL =
+    "**ALWAYS use `filename` parameter when calling `browser_snapshot`, `browser_console_messages`, or `browser_network_requests`.**";
+
+  it("states the filename mandate exactly once, and inside the Playwright section", () => {
+    const hits = skill.split(CANONICAL).length - 1;
+    expect(hits).toBe(1);
+    const sectionStart = skill.indexOf(`## ${SECTION}`);
+    expect(sectionStart).toBeGreaterThan(-1);
+    expect(skill.indexOf(CANONICAL)).toBeGreaterThan(sectionStart);
+  });
+
+  it("routes every other browser_snapshot mention to that section", () => {
+    const offenders = skill
+      .split(/^## /m)
+      .slice(1)
+      .filter((section) => !section.startsWith(SECTION))
+      .filter((section) => section.includes("browser_snapshot") && !section.includes(SECTION))
+      .map((section) => section.split(/\r?\n/, 1)[0]);
+    expect(offenders).toEqual([]);
+  });
+});
+
 // ── Package exports ───────────────────────────────────────────────────
 
 describe("Package exports", () => {
